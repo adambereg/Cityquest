@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useAuth } from '../contexts/AuthContext';
-import { Trophy, Medal, Award } from 'lucide-react';
+import { Trophy, Medal, Award, MapPin, Star, Shield } from 'lucide-react';
+import { USER_STATUS, getStatusByPoints } from '../constants/userStatus';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -14,7 +15,7 @@ interface UserProfile {
   avatar_url: string;
   total_points: number;
   rank: number;
-  status: string;
+  is_admin: boolean;
 }
 
 interface CompletedQuest {
@@ -30,6 +31,11 @@ export const Profile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [completedQuests, setCompletedQuests] = useState<CompletedQuest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nextStatusProgress, setNextStatusProgress] = useState<{
+    current: number;
+    next: number;
+    progress: number;
+  } | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -68,10 +74,29 @@ export const Profile = () => {
 
         if (rankError) throw rankError;
 
-        setProfile({
+        const userProfile = {
           ...profileData,
           rank: rankData,
-        });
+        };
+
+        setProfile(userProfile);
+
+        // Вычисляем прогресс до следующего статуса
+        const currentStatus = getStatusByPoints(userProfile.total_points);
+        const statusValues = Object.values(USER_STATUS);
+        const currentStatusIndex = statusValues.findIndex(s => s.name === currentStatus.name);
+        
+        if (currentStatusIndex < statusValues.length - 1) {
+          const nextStatus = statusValues[currentStatusIndex + 1];
+          const progress = ((userProfile.total_points - currentStatus.minPoints) /
+            (nextStatus.minPoints - currentStatus.minPoints)) * 100;
+          
+          setNextStatusProgress({
+            current: currentStatus.minPoints,
+            next: nextStatus.minPoints,
+            progress: Math.min(progress, 100)
+          });
+        }
 
         setCompletedQuests(questsData.map((q: any) => ({
           id: q.id,
@@ -90,19 +115,9 @@ export const Profile = () => {
     fetchProfile();
   }, [user]);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'novice':
-        return <Award className="text-gray-500" size={24} />;
-      case 'explorer':
-        return <Award className="text-blue-500" size={24} />;
-      case 'master':
-        return <Award className="text-yellow-500" size={24} />;
-      case 'legend':
-        return <Award className="text-purple-500" size={24} />;
-      default:
-        return <Award className="text-gray-500" size={24} />;
-    }
+  const getStatusIcon = (points: number) => {
+    const status = getStatusByPoints(points);
+    return <Award className={`text-${status.color}-500`} size={24} />;
   };
 
   if (loading) {
@@ -117,6 +132,8 @@ export const Profile = () => {
     return <div>Профиль не найден</div>;
   }
 
+  const currentStatus = getStatusByPoints(profile.total_points);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -128,18 +145,42 @@ export const Profile = () => {
               className="w-24 h-24 rounded-full object-cover"
             />
             <div>
-              <h1 className="text-2xl font-bold">{profile.username}</h1>
-              <div className="flex items-center space-x-2 text-gray-600">
-                {getStatusIcon(profile.status)}
-                <span>{profile.status}</span>
+              <div className="flex items-center space-x-2 mb-1">
+                <h1 className="text-2xl font-bold">{profile.username}</h1>
+                {profile.is_admin && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    <Shield className="w-4 h-4 mr-1" />
+                    Администратор
+                  </span>
+                )}
               </div>
+              <div className="flex items-center space-x-2 text-gray-600">
+                {getStatusIcon(profile.total_points)}
+                <span className={`text-${currentStatus.color}-500 font-medium`}>
+                  {currentStatus.label}
+                </span>
+              </div>
+              
+              {nextStatusProgress && (
+                <div className="mt-2">
+                  <div className="text-sm text-gray-500 mb-1">
+                    До следующего уровня: {nextStatusProgress.next - profile.total_points} очков
+                  </div>
+                  <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full bg-${currentStatus.color}-500 transition-all duration-500`}
+                      style={{ width: `${nextStatusProgress.progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Trophy className="text-yellow-500" size={24} />
+                <Star className="text-yellow-500" size={24} />
                 <div>
                   <div className="text-sm text-gray-600">Всего баллов</div>
                   <div className="text-xl font-bold">{profile.total_points}</div>
@@ -149,17 +190,17 @@ export const Profile = () => {
             
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Medal className="text-blue-500" size={24} />
+                <Trophy className="text-blue-500" size={24} />
                 <div>
                   <div className="text-sm text-gray-600">Место в рейтинге</div>
                   <div className="text-xl font-bold">#{profile.rank}</div>
                 </div>
               </div>
             </div>
-
+            
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Trophy className="text-green-500" size={24} />
+                <MapPin className="text-green-500" size={24} />
                 <div>
                   <div className="text-sm text-gray-600">Пройдено квестов</div>
                   <div className="text-xl font-bold">{completedQuests.length}</div>
@@ -169,27 +210,36 @@ export const Profile = () => {
           </div>
 
           <h2 className="text-xl font-bold mb-4">Завершённые квесты</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {completedQuests.map((quest) => (
-              <div
-                key={quest.id}
-                className="bg-gray-50 rounded-lg overflow-hidden"
-              >
-                <img
-                  src={quest.image_url}
-                  alt={quest.title}
-                  className="w-full h-32 object-cover"
-                />
-                <div className="p-4">
-                  <h3 className="font-semibold mb-2">{quest.title}</h3>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <div>{new Date(quest.completed_at).toLocaleDateString()}</div>
-                    <div>{quest.points_earned} баллов</div>
+          {completedQuests.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {completedQuests.map((quest) => (
+                <div
+                  key={quest.id}
+                  className="bg-gray-50 rounded-lg overflow-hidden"
+                >
+                  <img
+                    src={quest.image_url || '/default-quest.png'}
+                    alt={quest.title}
+                    className="w-full h-32 object-cover"
+                  />
+                  <div className="p-4">
+                    <h3 className="font-semibold mb-2">{quest.title}</h3>
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <div>{new Date(quest.completed_at).toLocaleDateString()}</div>
+                      <div className="flex items-center">
+                        <Star className="w-4 h-4 text-yellow-500 mr-1" />
+                        {quest.points_earned}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Вы еще не завершили ни одного квеста
+            </div>
+          )}
         </div>
       </div>
     </div>
