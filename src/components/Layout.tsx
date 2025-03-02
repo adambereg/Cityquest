@@ -1,11 +1,11 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Map, Trophy, User, Compass, LogOut } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
   const location = useLocation();
-  const { user, signOut } = useAuthStore();
+  const { user, signOut } = useAuth();
   
   const isActive = (path: string) => location.pathname === path;
   
@@ -21,10 +21,7 @@ const Layout: React.FC = () => {
           
           {user && (
             <div className="flex items-center space-x-2">
-              <span className="font-medium">{user.username}</span>
-              <span className="bg-blue-700 px-2 py-1 rounded-full text-sm">
-                {user.points} очков
-              </span>
+              <span className="font-medium">{user.email}</span>
             </div>
           )}
         </div>
